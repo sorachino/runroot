@@ -463,9 +463,10 @@
     Array.from(els.candidates.children).forEach((card, idx) => {
       card.classList.toggle('selected', idx === i);
     });
-    // On phones, immediately offer the share sheet (OsmAnd / Komoot etc.) for the tapped route.
-    // Must run synchronously within this click handler for iOS Safari to allow navigator.share().
-    tryAutoShare(i);
+    // Trigger the same flow as the "GPXダウンロード" button. On iOS Safari this opens
+    // Quick Look, which offers "OsmAndで開く" directly — navigator.share() was tried first
+    // but iOS didn't reliably surface OsmAnd/Komoot through it, so we don't use it.
+    downloadGpx(i);
   }
 
   function buildGpx(c){
@@ -496,24 +497,6 @@ ${points}
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }
-
-  function tryAutoShare(i){
-    const c = candidates[i];
-    if (!c || !navigator.share) return; // desktop / unsupported browsers: use the download button instead
-    const { gpxText, filename } = buildGpx(c);
-    let file;
-    try {
-      file = new File([gpxText], filename, { type: 'application/gpx+xml' });
-    } catch (e) {
-      return;
-    }
-    if (!navigator.canShare || !navigator.canShare({ files: [file] })) return;
-    navigator.share({
-      files: [file],
-      title: c.label + 'ルート',
-      text: c.label + '（' + (c.distanceM/1000).toFixed(2) + 'km）'
-    }).catch(() => { /* user cancelled the share sheet — not an error */ });
   }
 
 })();
