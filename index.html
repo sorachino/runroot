@@ -172,16 +172,6 @@
 
 <div class="panel">
   <div class="row">
-    <label for="apiKey">APIキー</label>
-    <input type="password" id="apiKey" placeholder="GraphHopper APIキー" autocomplete="off">
-  </div>
-  <div class="row">
-    <div class="checkbox-row">
-      <input type="checkbox" id="rememberKey">
-      <label for="rememberKey" style="min-width:auto;">このブラウザに保存する</label>
-    </div>
-  </div>
-  <div class="row">
     <label for="distance">距離(km)</label>
     <input type="number" id="distance" value="3" min="0.5" max="20" step="0.5">
     <button class="btn" id="locateBtn">現在地を取得</button>
@@ -206,9 +196,9 @@
 (function(){
   "use strict";
 
+  const GRAPHHOPPER_API_KEY = 'd9619672-c7da-4751-849a-a19ad36c4f56';
+
   const els = {
-    apiKey: document.getElementById('apiKey'),
-    rememberKey: document.getElementById('rememberKey'),
     distance: document.getElementById('distance'),
     locateBtn: document.getElementById('locateBtn'),
     generateBtn: document.getElementById('generateBtn'),
@@ -228,27 +218,6 @@
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19
   }).addTo(map);
-
-  // ---- api key persistence ----
-  try {
-    const saved = localStorage.getItem('gh_api_key');
-    if (saved) {
-      els.apiKey.value = saved;
-      els.rememberKey.checked = true;
-    }
-  } catch (e) { /* localStorage unavailable, ignore */ }
-
-  els.apiKey.addEventListener('input', () => {
-    try {
-      if (els.rememberKey.checked) localStorage.setItem('gh_api_key', els.apiKey.value);
-    } catch (e) {}
-  });
-  els.rememberKey.addEventListener('change', () => {
-    try {
-      if (els.rememberKey.checked) localStorage.setItem('gh_api_key', els.apiKey.value);
-      else localStorage.removeItem('gh_api_key');
-    } catch (e) {}
-  });
 
   function setStatus(msg, isError){
     els.status.textContent = msg || '';
@@ -289,8 +258,7 @@
   els.generateBtn.addEventListener('click', generateRoutes);
 
   async function generateRoutes(){
-    const key = els.apiKey.value.trim();
-    if (!key) { setStatus('APIキーを入力してください。', true); return; }
+    const key = GRAPHHOPPER_API_KEY;
     if (!homeCoords) { setStatus('先に現在地を取得してください。', true); return; }
     const km = parseFloat(els.distance.value);
     if (!km || km <= 0) { setStatus('距離を正しく入力してください。', true); return; }
