@@ -418,15 +418,16 @@
     Array.from(els.candidates.children).forEach((card, idx) => {
       card.classList.toggle('selected', idx === i);
     });
+    // On phones, immediately offer the share sheet (OsmAnd / Komoot etc.) for the tapped route.
+    // Must run synchronously within this click handler for iOS Safari to allow navigator.share().
+    tryAutoShare(i);
   }
 
-  function downloadGpx(i){
-    const c = candidates[i];
-    if (!c) return;
+  function buildGpx(c){
     const points = c.coords.map(([lat, lon]) =>
       '      <trkpt lat="' + lat + '" lon="' + lon + '"></trkpt>'
     ).join('\n');
-    const gpx =
+    const gpxText =
 `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="route-maker" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
@@ -436,13 +437,38 @@ ${points}
     </trkseg>
   </trk>
 </gpx>`;
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    return { gpxText, filename: 'route-' + c.key + '.gpx' };
+  }
+
+  function downloadGpx(i){
+    const c = candidates[i];
+    if (!c) return;
+    const { gpxText, filename } = buildGpx(c);
+    const blob = new Blob([gpxText], { type: 'application/gpx+xml' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'route-' + c.key + '.gpx';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  function tryAutoShare(i){
+    const c = candidates[i];
+    if (!c || !navigator.share) return; // desktop / unsupported browsers: use the download button instead
+    const { gpxText, filename } = buildGpx(c);
+    let file;
+    try {
+      file = new File([gpxText], filename, { type: 'application/gpx+xml' });
+    } catch (e) {
+      return;
+    }
+    if (!navigator.canShare || !navigator.canShare({ files: [file] })) return;
+    navigator.share({
+      files: [file],
+      title: c.label + 'ルート',
+      text: c.label + '（' + (c.distanceM/1000).toFixed(2) + 'km）'
+    }).catch(() => { /* user cancelled the share sheet — not an error */ });
   }
 
 })();
