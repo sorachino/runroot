@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ルートメーカー</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root{
+    --bg:#10161b;
+    --surface:#1a222a;
+    --surface-2:#212b34;
+    --border:#2a343d;
+    --text:#e7ecee;
+    --text-dim:#8fa0ab;
+    --accent-quiet:#8fae72;
+    --accent-balance:#d6a756;
+    --accent-standard:#6e93b8;
+    --danger:#c96a5a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:40px;
+  }
+  .mono{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-variant-numeric:tabular-nums;
+  }
+  header{
+    padding:18px 16px 10px;
+    border-bottom:1px solid var(--border);
+  }
+  header h1{
+    margin:0;
+    font-size:19px;
+    font-weight:600;
+    letter-spacing:0.01em;
+  }
+  header p{
+    margin:4px 0 0;
+    color:var(--text-dim);
+    font-size:13px;
+    line-height:1.5;
+  }
+  .panel{
+    padding:14px 16px;
+    border-bottom:1px solid var(--border);
+    background:var(--surface);
+  }
+  .row{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-bottom:10px;
+  }
+  .row:last-child{margin-bottom:0;}
+  label{
+    font-size:13px;
+    color:var(--text-dim);
+    min-width:78px;
+    flex-shrink:0;
+  }
+  input[type="text"],input[type="password"],input[type="number"]{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:8px;
+    padding:9px 10px;
+    font-size:14px;
+    width:100%;
+  }
+  input[type="number"]{max-width:110px;}
+  .btn{
+    appearance:none;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text);
+    padding:10px 14px;
+    border-radius:8px;
+    font-size:14px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{
+    background:var(--accent-quiet);
+    border-color:var(--accent-quiet);
+    color:#12180f;
+    font-weight:600;
+  }
+  .btn:disabled{opacity:0.45;cursor:default;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .checkbox-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:var(--text-dim);
+  }
+  #status{
+    font-size:13px;
+    color:var(--text-dim);
+    min-height:18px;
+    padding:0 16px;
+    margin-top:8px;
+  }
+  #status.error{color:var(--danger);}
+  #map{
+    height:46vh;
+    min-height:280px;
+    width:100%;
+  }
+  #candidates{
+    padding:14px 16px 4px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px 14px;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .card.selected{
+    border-color:var(--card-accent,var(--accent-quiet));
+    box-shadow:0 0 0 1px var(--card-accent,var(--accent-quiet)) inset;
+  }
+  .card-head{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .swatch{
+    width:10px;height:10px;border-radius:50%;
+    background:var(--card-accent,var(--accent-quiet));
+    flex-shrink:0;
+  }
+  .card-title{font-size:14px;font-weight:600;flex:1;}
+  .card-stats{
+    display:flex;
+    gap:16px;
+    font-size:13px;
+    color:var(--text-dim);
+  }
+  .card-stats b{color:var(--text);font-weight:600;}
+  .card-actions{display:flex;justify-content:flex-end;}
+  .card-actions .btn{padding:6px 12px;font-size:12px;}
+  footer{
+    padding:8px 16px 0;
+    color:var(--text-dim);
+    font-size:11px;
+    line-height:1.6;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ルートメーカー</h1>
+  <p>現在地から指定距離の周回ルートを、幹線道路の少なさを基準にした重み付けで3案生成します。</p>
+</header>
+
+<div class="panel">
+  <div class="row">
+    <label for="apiKey">APIキー</label>
+    <input type="password" id="apiKey" placeholder="GraphHopper APIキー" autocomplete="off">
+  </div>
+  <div class="row">
+    <div class="checkbox-row">
+      <input type="checkbox" id="rememberKey">
+      <label for="rememberKey" style="min-width:auto;">このブラウザに保存する</label>
+    </div>
+  </div>
+  <div class="row">
+    <label for="distance">距離(km)</label>
+    <input type="number" id="distance" value="3" min="0.5" max="20" step="0.5">
+    <button class="btn" id="locateBtn">現在地を取得</button>
+  </div>
+  <div class="row btn-row">
+    <button class="btn primary" id="generateBtn" disabled>ルートを生成</button>
+  </div>
+</div>
+
+<div id="status"></div>
+
+<div id="map"></div>
+
+<div id="candidates"></div>
+
+<footer>
+  「幹線道路の少なさ」は、返ってきたルート内の主要道路区間(street_ref付き)が占める距離の割合から算出した近似値です。標高は起点からの累積上り(ascend)を表示しています。GPXファイルはOsmAnd等の地図アプリに読み込んで音声ナビとして利用できます。
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const els = {
+    apiKey: document.getElementById('apiKey'),
+    rememberKey: document.getElementById('rememberKey'),
+    distance: document.getElementById('distance'),
+    locateBtn: document.getElementById('locateBtn'),
+    generateBtn: document.getElementById('generateBtn'),
+    status: document.getElementById('status'),
+    candidates: document.getElementById('candidates'),
+  };
+
+  let map, homeMarker;
+  let homeCoords = null; // {lat, lon}
+  let routeLayers = [];  // leaflet polylines, index-aligned with state.candidates
+  let candidates = [];   // {label, color, distanceM, ascendM, arterialPct, coords, raw}
+  let selectedIndex = -1;
+
+  // ---- setup map ----
+  map = L.map('map', { zoomControl: true }).setView([35.681, 139.767], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  // ---- api key persistence ----
+  try {
+    const saved = localStorage.getItem('gh_api_key');
+    if (saved) {
+      els.apiKey.value = saved;
+      els.rememberKey.checked = true;
+    }
+  } catch (e) { /* localStorage unavailable, ignore */ }
+
+  els.apiKey.addEventListener('input', () => {
+    try {
+      if (els.rememberKey.checked) localStorage.setItem('gh_api_key', els.apiKey.value);
+    } catch (e) {}
+  });
+  els.rememberKey.addEventListener('change', () => {
+    try {
+      if (els.rememberKey.checked) localStorage.setItem('gh_api_key', els.apiKey.value);
+      else localStorage.removeItem('gh_api_key');
+    } catch (e) {}
+  });
+
+  function setStatus(msg, isError){
+    els.status.textContent = msg || '';
+    els.status.classList.toggle('error', !!isError);
+  }
+
+  // ---- geolocation ----
+  els.locateBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      setStatus('このブラウザは位置情報取得に対応していません。', true);
+      return;
+    }
+    setStatus('現在地を取得中…');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        homeCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        if (homeMarker) map.removeLayer(homeMarker);
+        homeMarker = L.marker([homeCoords.lat, homeCoords.lon]).addTo(map);
+        map.setView([homeCoords.lat, homeCoords.lon], 16);
+        els.generateBtn.disabled = false;
+        setStatus('現在地を取得しました。');
+      },
+      (err) => {
+        setStatus('現在地を取得できませんでした: ' + err.message, true);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+
+  // ---- route generation ----
+  const VARIANTS = [
+    { key: 'quiet',    label: '静か重視',       color: '#8fae72', penalty: 0.15 },
+    { key: 'balance',  label: 'バランス',       color: '#d6a756', penalty: 0.5  },
+    { key: 'standard', label: '標準(重み無し)', color: '#6e93b8', penalty: null }
+  ];
+  const SHARED_SEED = 1; // fixed so differences come from weighting, not randomness
+
+  els.generateBtn.addEventListener('click', generateRoutes);
+
+  async function generateRoutes(){
+    const key = els.apiKey.value.trim();
+    if (!key) { setStatus('APIキーを入力してください。', true); return; }
+    if (!homeCoords) { setStatus('先に現在地を取得してください。', true); return; }
+    const km = parseFloat(els.distance.value);
+    if (!km || km <= 0) { setStatus('距離を正しく入力してください。', true); return; }
+    const meters = Math.round(km * 1000);
+
+    els.generateBtn.disabled = true;
+    setStatus('ルートを生成中…(3案)');
+    clearCandidates();
+
+    try {
+      const results = await Promise.all(
+        VARIANTS.map(v => fetchRoute(key, homeCoords, meters, v))
+      );
+      candidates = results.filter(r => r !== null);
+      if (candidates.length === 0) {
+        setStatus('ルートを生成できませんでした。距離を変えて試してください。', true);
+      } else {
+        renderCandidates();
+        setStatus(candidates.length + '案のルートを生成しました。カードをタップすると選択できます。');
+      }
+    } catch (e) {
+      setStatus('エラー: ' + e.message, true);
+    } finally {
+      els.generateBtn.disabled = false;
+    }
+  }
+
+  async function fetchRoute(key, home, distanceM, variant){
+    const base = 'https://graphhopper.com/api/1/route';
+    let url, opts;
+
+    if (variant.penalty === null) {
+      // standard: no custom_model, plain GET
+      const params = new URLSearchParams({
+        point: home.lat + ',' + home.lon,
+        profile: 'foot',
+        algorithm: 'round_trip',
+        'round_trip.distance': distanceM,
+        'round_trip.seed': SHARED_SEED,
+        points_encoded: 'false',
+        key: key
+      });
+      url = base + '?' + params.toString();
+      opts = { method: 'GET' };
+    } else {
+      url = base + '?key=' + encodeURIComponent(key);
+      opts = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          points: [[home.lon, home.lat]],
+          profile: 'foot',
+          algorithm: 'round_trip',
+          'round_trip.distance': distanceM,
+          'round_trip.seed': SHARED_SEED,
+          points_encoded: false,
+          custom_model: {
+            priority: [
+              { if: 'road_class == PRIMARY || road_class == SECONDARY || road_class == TRUNK', multiply_by: String(variant.penalty) }
+            ]
+          }
+        })
+      };
+    }
+
+    let res;
+    try {
+      res = await fetch(url, opts);
+    } catch (e) {
+      throw new Error('GraphHopperへの通信に失敗しました(' + variant.label + ')。ネットワークまたはCORSの問題の可能性があります。');
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error('APIエラー(' + variant.label + ', ' + res.status + '): ' + body.slice(0, 200));
+    }
+    const data = await res.json();
+    if (!data.paths || !data.paths.length) return null;
+    const path = data.paths[0];
+
+    const coords = path.points.coordinates.map(c => [c[1], c[0]]); // [lat,lon]
+    const arterialPct = computeArterialPct(path);
+
+    return {
+      key: variant.key,
+      label: variant.label,
+      color: variant.color,
+      distanceM: path.distance,
+      ascendM: path.ascend,
+      arterialPct: arterialPct,
+      coords: coords
+    };
+  }
+
+  function computeArterialPct(path){
+    const instr = path.instructions || [];
+    let total = 0, arterial = 0;
+    for (const step of instr) {
+      total += step.distance || 0;
+      if (step.street_ref) arterial += step.distance || 0;
+    }
+    if (total === 0) return 0;
+    return Math.round((arterial / total) * 100);
+  }
+
+  function clearCandidates(){
+    routeLayers.forEach(l => map.removeLayer(l));
+    routeLayers = [];
+    candidates = [];
+    selectedIndex = -1;
+    els.candidates.innerHTML = '';
+  }
+
+  function renderCandidates(){
+    routeLayers.forEach(l => map.removeLayer(l));
+    routeLayers = candidates.map((c, i) => {
+      const line = L.polyline(c.coords, { color: c.color, weight: 4, opacity: 0.55 }).addTo(map);
+      line.on('click', () => selectCandidate(i));
+      return line;
+    });
+    if (routeLayers.length) {
+      const group = L.featureGroup(routeLayers);
+      map.fitBounds(group.getBounds(), { padding: [24, 24] });
+    }
+
+    els.candidates.innerHTML = '';
+    candidates.forEach((c, i) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.setProperty('--card-accent', c.color);
+      card.innerHTML =
+        '<div class="card-head">' +
+          '<span class="swatch"></span>' +
+          '<span class="card-title">' + c.label + '</span>' +
+        '</div>' +
+        '<div class="card-stats mono">' +
+          '<span>距離 <b>' + (c.distanceM/1000).toFixed(2) + 'km</b></span>' +
+          '<span>上り <b>' + Math.round(c.ascendM) + 'm</b></span>' +
+          '<span>幹線道路比率 <b>' + c.arterialPct + '%</b></span>' +
+        '</div>' +
+        '<div class="card-actions"><button class="btn" data-i="' + i + '">GPXダウンロード</button></div>';
+      card.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        selectCandidate(i);
+      });
+      card.querySelector('button').addEventListener('click', () => downloadGpx(i));
+      els.candidates.appendChild(card);
+    });
+  }
+
+  function selectCandidate(i){
+    selectedIndex = i;
+    routeLayers.forEach((layer, idx) => {
+      const isSel = idx === i;
+      layer.setStyle({ weight: isSel ? 6 : 4, opacity: isSel ? 0.95 : 0.35 });
+      if (isSel) layer.bringToFront();
+    });
+    Array.from(els.candidates.children).forEach((card, idx) => {
+      card.classList.toggle('selected', idx === i);
+    });
+  }
+
+  function downloadGpx(i){
+    const c = candidates[i];
+    if (!c) return;
+    const points = c.coords.map(([lat, lon]) =>
+      '      <trkpt lat="' + lat + '" lon="' + lon + '"></trkpt>'
+    ).join('\n');
+    const gpx =
+`<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="route-maker" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>${c.label} (${(c.distanceM/1000).toFixed(2)}km)</name>
+    <trkseg>
+${points}
+    </trkseg>
+  </trk>
+</gpx>`;
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'route-' + c.key + '.gpx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+})();
+</script>
+</body>
+</html>
